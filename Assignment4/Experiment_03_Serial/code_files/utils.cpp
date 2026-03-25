@@ -1,32 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
+#include <string.h>
 #include <omp.h>
 #include "utils.h"
-#include "init.h"
 
-// -------------------------------------------------------------
-// ULTRA-FAST INLINE PRNG (Xorshift32)
-// This avoids the massive CPU overhead of rand() and rand_r()
-// -------------------------------------------------------------
-static inline uint32_t fast_rand(uint32_t *state) {
-    uint32_t x = *state;
-    x ^= x << 13;
-    x ^= x >> 17;
-    x ^= x << 5;
-    *state = x;
-    return x;
-}
-
-// Returns a double strictly between -1.0 and 1.0
-static inline double fast_rand_norm(uint32_t *state) {
-    // 4294967295.0 is the max value of uint32_t
-    return ((double)fast_rand(state) / 4294967295.0) * 2.0 - 1.0;
-}
-
-// -------------------------------------------------------------
-// INTERPOLATION (Serial)
-// -------------------------------------------------------------
+// Interpolation (Serial Code)
 void interpolation(double *mesh_value, Points *points) {
     double inv_dx = NX;
     double inv_dy = NY;
@@ -56,25 +34,22 @@ void interpolation(double *mesh_value, Points *points) {
     }
 }
 
-// -------------------------------------------------------------
-// STOCHASTIC MOVER (Serial Baseline)
-// -------------------------------------------------------------
+// Stochastic Mover (Serial Code) 
 void mover_serial(Points *points, double deltaX, double deltaY) {
-    uint32_t seed = 123456789; // Fixed seed
-   
-    for (int p = 0; p < NUM_Points; p++) {
-        double orig_x = points->x[p];
-        double orig_y = points->y[p];
+    // Using rand_r to generate random values in serial as well
+    unsigned int seed = 123456789;  // Fixed seed for consistency
+    for (long long p = 0; p < NUM_Points; p++) {
         double new_x, new_y;
 
-        // Rejection Sampling: Keep rolling until it stays inside the domain
         while (1) {
-            new_x = orig_x + fast_rand_norm(&seed) * deltaX;
-            new_y = orig_y + fast_rand_norm(&seed) * deltaY;
-           
-            if (new_x >= 0.0 && new_x <= 1.0 && new_y >= 0.0 && new_y <= 1.0) {
+            double rx = ((double)rand_r(&seed) / RAND_MAX) * 2.0 * deltaX - deltaX;
+            double ry = ((double)rand_r(&seed) / RAND_MAX) * 2.0 * deltaY - deltaY;
+
+            new_x = points->x[p] + rx;
+            new_y = points->y[p] + ry;
+
+            if (new_x >= 0.0 && new_x <= 1.0 && new_y >= 0.0 && new_y <= 1.0)
                 break;
-            }
         }
 
         points->x[p] = new_x;
@@ -82,50 +57,44 @@ void mover_serial(Points *points, double deltaX, double deltaY) {
     }
 }
 
-// -------------------------------------------------------------
-// STOCHASTIC MOVER (OpenMP Parallel)
-// -------------------------------------------------------------
+// Stochastic Mover (Parallel Code) 
 void mover_parallel(Points *points, double deltaX, double deltaY) {
-   
     #pragma omp parallel
     {
-        // Give every thread its own unique seed to prevent false sharing/locking
-        uint32_t seed = 123456789 + omp_get_thread_num();
+        // Each thread gets its own seed for random number generation
+        unsigned int seed = 123456789 + omp_get_thread_num();  // Better seed initialization
 
-        // Static schedule is best here since workload per particle is relatively uniform
         #pragma omp for schedule(static)
-        for (int p = 0; p < NUM_Points; p++) {
-            double orig_x = points->x[p];
-            double orig_y = points->y[p];
-            double new_x, new_y;
+        for (long long p = 0; p < NUM_Points; p++) {
+            // Generate displacement that stays inside the domain
+            double min_dx = -points->x[p];
+            double max_dx = 1.0 - points->x[p];
+            double rx = ((double)rand_r(&seed) / RAND_MAX) * (max_dx - min_dx);  // Using rand_r for randomness
 
-            while (1) {
-                new_x = orig_x + fast_rand_norm(&seed) * deltaX;
-                new_y = orig_y + fast_rand_norm(&seed) * deltaY;
-               
-                if (new_x >= 0.0 && new_x <= 1.0 && new_y >= 0.0 && new_y <= 1.0) {
-                    break;
-                }
-            }
+            double min_dy = -points->y[p];
+            double max_dy = 1.0 - points->y[p];
+            double ry = ((double)rand_r(&seed) / RAND_MAX) * (max_dy - min_dy);  // Using rand_r for randomness
 
-            points->x[p] = new_x;
-            points->y[p] = new_y;
+            points->x[p] += rx;
+            points->y[p] += ry;
         }
     }
 }
 
+// Write mesh to file
 void save_mesh(double *mesh_value) {
     FILE *fd = fopen("Mesh.out", "w");
     if (!fd) {
         printf("Error creating Mesh.out\n");
         exit(1);
     }
+
     for (int i = 0; i < GRID_Y; i++) {
         for (int j = 0; j < GRID_X; j++) {
             fprintf(fd, "%lf ", mesh_value[i * GRID_X + j]);
         }
         fprintf(fd, "\n");
     }
+
     fclose(fd);
 }
-
