@@ -1,0 +1,15 @@
+[warn] Epoll ADD(4) on fd 1 failed.  Old events were 0; read change was 0 (none); write change was 1 (add): Operation not permitted
+[1777488345.069378] [gics2:19237:0]         sys.c:744  MXM  WARN  Conflicting CPU frequencies detected, using: 3394.73
+[1777485269.887451] [gics4:31461:0]         sys.c:744  MXM  WARN  Conflicting CPU frequencies detected, using: 3400.11
+[1777487198.837957] [gics1:9350 :0]         sys.c:744  MXM  WARN  Conflicting CPU frequencies detected, using: 3291.74
+[1777487445.147355] [gics3:9848 :0]         sys.c:744  MXM  WARN  Conflicting CPU frequencies detected, using: 2913.62
+==========================================================
+  Hybrid MPI+OpenMP PIC
+==========================================================
+  NX=500 NY=200 NUM_Points=20000000 Maxiter=10
+  MPI_ranks=4  OMP_threads=1  Total_cores=4
+----------------------------------------------------------
+  Total interpolation time : 0.824085 s
+  Total mover time         : 0.950390 s
+  Total pipeline time      : 1.788355 s
+==========================================================
